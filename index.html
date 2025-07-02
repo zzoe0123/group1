@@ -1,0 +1,427 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title id="pageTitle">星巴克忠誠計畫</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media (min-width: 430px) {
+      .container {
+        max-width: 430px;
+      }
+    }
+    .coffee-icon {
+      width: 50px;
+      height: 50px;
+    }
+    .btn-primary {
+      background-color: #00704A;
+      color: white;
+    }
+    .btn-primary:hover {
+      background-color: #00855A;
+    }
+    .progress-bar {
+      background-color: #00704A;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 font-sans">
+  <div class="container mx-auto p-4 min-h-screen">
+    <!-- Homepage -->
+    <div id="homePage" class="space-y-4">
+      <!-- Header -->
+      <header class="flex justify-between items-center bg-white p-4 rounded-lg shadow mb-4">
+        <h1 id="appTitle" class="text-xl font-bold text-green-800">星巴克忠誠計畫</h1>
+        <div class="flex items-center space-x-2">
+          <div class="text-md font-semibold text-green-700">
+            <span id="pointsLabel">點數</span>: <span id="points">0</span>
+          </div>
+          <button id="languageBtn" class="btn-primary px-2 py-1 rounded-lg text-xs">語言切換</button>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="space-y-4">
+        <!-- Profile Section -->
+        <section class="bg-white p-4 rounded-lg shadow">
+          <h2 id="profileTitle" class="text-lg font-semibold text-green-800 mb-3">個人資料</h2>
+          <p id="profileName" class="text-sm text-green-700">名稱: 測試用戶</p>
+          <p id="profileEmail" class="text-sm text-green-700">電子郵件: test@example.com</p>
+        </section>
+
+        <!-- Purchase Section -->
+        <section class="bg-white p-4 rounded-lg shadow">
+          <h2 id="purchaseTitle" class="text-lg font-semibold text-green-800 mb-3">模擬消費</h2>
+          <p id="pointsRule" class="text-sm text-green-700 mb-2">每消費 10 元獲得 1 點</p>
+          <div class="flex items-center justify-between mb-3">
+            <p id="purchaseLabel" class="text-sm font-medium text-green-700">輸入消費金額 (元)</p>
+            <input id="purchaseAmount" type="number" min="10" class="w-24 p-1 border rounded-lg text-sm" placeholder="例如 200">
+            <button id="purchaseBtn" class="btn-primary px-3 py-1 rounded-lg text-sm">消費</button>
+          </div>
+          <!-- Spin Wheel (Game Group Only) -->
+          <div id="spinWheelContainer" class="hidden">
+            <p id="spinWheelLabel" class="text-sm font-medium text-green-700 mb-2">消費滿 200 元可轉輪抽獎</p>
+            <button id="spinWheelBtn" class="w-full btn-primary px-3 py-2 rounded-lg text-sm disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>轉輪抽獎</button>
+          </div>
+          <!-- Progress Bar (Game Group Only) -->
+          <div id="progressBarContainer" class="hidden mt-3">
+            <p id="progressLabel" class="text-sm font-medium text-green-700 mb-1">兌換進度 (100 點兌換免費咖啡)</p>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div id="progressBar" class="progress-bar h-2 rounded-full" style="width: 0%"></div>
+            </div>
+            <p class="text-xs text-green-600 mt-1"><span id="progressText">進度</span>: <span id="progressPercent">0%</span></p>
+          </div>
+        </section>
+
+        <!-- Transaction History -->
+        <section class="bg-white p-4 rounded-lg shadow">
+          <h2 id="historyTitle" class="text-lg font-semibold text-green-800 mb-3">消費紀錄</h2>
+          <div id="transactionHistory" class="space-y-2"></div>
+        </section>
+
+        <!-- Rewards Section -->
+        <section class="bg-white p-4 rounded-lg shadow">
+          <h2 id="rewardsTitle" class="text-lg font-semibold text-green-800 mb-3">兌換獎勵</h2>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <p id="coffeeReward" class="text-sm font-medium text-green-700">免費中杯咖啡 (100 點)</p>
+              <button onclick="redeemReward('coffee', 100)" class="btn-primary px-3 py-1 rounded-lg text-sm">兌換</button>
+            </div>
+            <div class="flex items-center justify-between">
+              <p id="buyOneGetOneReward" class="text-sm font-medium text-green-700">買一送一 (100 點)</p>
+              <button onclick="redeemReward('buyOneGetOne', 100)" class="btn-primary px-3 py-1 rounded-lg text-sm">兌換</button>
+            </div>
+            <div class="flex items-center justify-between">
+              <p id="mugReward" class="text-sm font-medium text-green-700">限量馬克杯 (150 點)</p>
+              <button onclick="redeemReward('mug', 150)" class="btn-primary px-3 py-1 rounded-lg text-sm">兌換</button>
+            </div>
+            <div class="flex items-center justify-between">
+              <p id="giftBoxReward" class="text-sm font-medium text-green-700">限量禮盒 (150 點)</p>
+              <button onclick="redeemReward('giftBox', 150)" class="btn-primary px-3 py-1 rounded-lg text-sm">兌換</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- Spin Wheel Modal (Game Group Only) -->
+    <div id="spinWheelModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+      <div class="bg-white p-4 rounded-lg shadow-lg max-w-xs w-full text-center">
+        <h3 id="spinWheelModalTitle" class="text-md font-semibold text-green-800 mb-3">轉輪抽獎</h3>
+        <img id="spinWheelImage" src="https://i.imgur.com/spinwheel.png" alt="Spin Wheel" class="w-32 h-32 mx-auto mb-3">
+        <p id="spinWheelResult" class="text-sm text-green-700 mb-3">點擊開始抽獎！</p>
+        <button id="spinBtn" class="btn-primary px-3 py-1 rounded-lg text-sm">開始</button>
+        <button id="shareSpinBtn" class="mt-2 w-full btn-primary px-3 py-1 rounded-lg text-sm hidden">分享結果</button>
+        <button id="closeSpinWheelBtn" onclick="closeSpinWheelModal()" class="mt-3 w-full btn-primary px-3 py-1 rounded-lg text-sm">關閉</button>
+      </div>
+    </div>
+
+    <!-- Reward Success Modal -->
+    <div id="rewardSuccessModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+      <div class="bg-white p-4 rounded-lg shadow-lg max-w-xs w-full text-center">
+        <h3 id="rewardSuccessTitle" class="text-md font-semibold text-green-800 mb-3">恭喜成功兌換</h3>
+        <img src="https://i.imgur.com/xAbGAlx.png" alt="Success" class="w-16 h-16 mx-auto mb-3">
+        <p id="rewardSuccessMessage" class="text-sm text-green-700"></p>
+        <button id="closeRewardSuccessBtn" onclick="closeRewardSuccessModal()" class="mt-3 w-full btn-primary px-3 py-1 rounded-lg text-sm">關閉</button>
+      </div>
+    </div>
+
+    <!-- Insufficient Points Modal -->
+    <div id="insufficientPointsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+      <div class="bg-white p-4 rounded-lg shadow-lg max-w-xs w-full">
+        <h3 id="insufficientPointsTitle" class="text-md font-semibold text-green-800">點數不足</h3>
+        <p id="insufficientPointsMessage" class="text-sm text-green-700 mt-2"></p>
+        <button id="closeInsufficientPointsBtn" onclick="closeInsufficientPointsModal()" class="mt-3 w-full btn-primary px-3 py-1 rounded-lg text-sm">關閉</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let points = 0;
+    let totalSpent = 0;
+    let currentLanguage = 'zh-TW';
+    let isGameGroup = new URLSearchParams(window.location.search).get('group') === 'game';
+    let transactions = [];
+
+    const translations = {
+      'zh-TW': {
+        pageTitle: '星巴克忠誠計畫',
+        appTitle: '星巴克忠誠計畫',
+        pointsLabel: '點數',
+        languageBtn: '語言切換',
+        profileTitle: '個人資料',
+        profileName: '名稱: 測試用戶',
+        profileEmail: '電子郵件: test@example.com',
+        purchaseTitle: '模擬消費',
+        pointsRule: '每消費 10 元獲得 1 點',
+        purchaseLabel: '輸入消費金額 (元)',
+        purchaseBtn: '消費',
+        spinWheelLabel: '消費滿 200 元可轉輪抽獎',
+        progressLabel: '兌換進度 (100 點兌換免費咖啡)',
+        progressText: '進度',
+        historyTitle: '消費紀錄',
+        rewardsTitle: '兌換獎勵',
+        coffeeReward: '免費中杯咖啡 (100 點)',
+        buyOneGetOneReward: '買一送一 (100 點)',
+        mugReward: '限量馬克杯 (150 點)',
+        giftBoxReward: '限量禮盒 (150 點)',
+        redeemBtn: '兌換',
+        spinWheelModalTitle: '轉輪抽獎',
+        spinWheelResult: '點擊開始抽獎！',
+        shareSpinResult: '分享結果',
+        spinBtn: '開始',
+        close: '關閉',
+        rewardSuccessTitle: '恭喜成功兌換',
+        rewardSuccessMessage: '你已兌換 {item}！',
+        insufficientPointsTitle: '點數不足',
+        insufficientPointsMessage: '點數不足，還差 {points} 點！'
+      },
+      'en': {
+        pageTitle: 'Starbucks Loyalty Program',
+        appTitle: 'Starbucks Loyalty Program',
+        pointsLabel: 'Points',
+        languageBtn: 'Switch Language',
+        profileTitle: 'Profile',
+        profileName: 'Name: Test User',
+        profileEmail: 'Email: test@example.com',
+        purchaseTitle: 'Simulate Purchase',
+        pointsRule: 'Earn 1 point for every $10 spent',
+        purchaseLabel: 'Enter Purchase Amount ($)',
+        purchaseBtn: 'Purchase',
+        spinWheelLabel: 'Spend $200 to Spin the Wheel',
+        progressLabel: 'Redemption Progress (100 points for a free coffee)',
+        progressText: 'Progress',
+        historyTitle: 'Transaction History',
+        rewardsTitle: 'Redeem Rewards',
+        coffeeReward: 'Free Medium Coffee (100 Points)',
+        buyOneGetOneReward: 'Buy One Get One (100 Points)',
+        mugReward: 'Limited Mug (150 Points)',
+        giftBoxReward: 'Limited Gift Box (150 Points)',
+        redeemBtn: 'Redeem',
+        spinWheelModalTitle: 'Spin the Wheel',
+        spinWheelResult: 'Click to Start Spinning!',
+        shareSpinResult: 'Share Result',
+        spinBtn: 'Start',
+        close: 'Close',
+        rewardSuccessTitle: 'Successfully Redeemed',
+        rewardSuccessMessage: 'You have redeemed {item}!',
+        insufficientPointsTitle: 'Insufficient Points',
+        insufficientPointsMessage: 'Insufficient points, need {points} more!'
+      }
+    };
+
+    // Initialize Group
+    function initializeGroup() {
+      if (isGameGroup) {
+        document.getElementById('spinWheelContainer').classList.remove('hidden');
+        document.getElementById('progressBarContainer').classList.remove('hidden');
+      }
+    }
+
+    // Language Toggle
+    document.getElementById('languageBtn').addEventListener('click', () => {
+      currentLanguage = currentLanguage === 'zh-TW' ? 'en' : 'zh-TW';
+      updateLanguage();
+    });
+
+    // Update Language
+    function updateLanguage() {
+      const t = translations[currentLanguage];
+      document.getElementById('pageTitle').textContent = t.pageTitle;
+      document.getElementById('appTitle').textContent = t.appTitle;
+      document.getElementById('pointsLabel').textContent = t.pointsLabel;
+      document.getElementById('languageBtn').textContent = t.languageBtn;
+      document.getElementById('profileTitle').textContent = t.profileTitle;
+      document.getElementById('profileName').textContent = t.profileName;
+      document.getElementById('profileEmail').textContent = t.profileEmail;
+      document.getElementById('purchaseTitle').textContent = t.purchaseTitle;
+      document.getElementById('pointsRule').textContent = t.pointsRule;
+      document.getElementById('purchaseLabel').textContent = t.purchaseLabel;
+      document.getElementById('purchaseBtn').textContent = t.purchaseBtn;
+      document.getElementById('spinWheelLabel').textContent = t.spinWheelLabel;
+      document.getElementById('progressLabel').textContent = t.progressLabel;
+      document.getElementById('progressText').textContent = t.progressText;
+      document.getElementById('historyTitle').textContent = t.historyTitle;
+      document.getElementById('rewardsTitle').textContent = t.rewardsTitle;
+      document.getElementById('coffeeReward').textContent = t.coffeeReward;
+      document.getElementById('buyOneGetOneReward').textContent = t.buyOneGetOneReward;
+      document.getElementById('mugReward').textContent = t.mugReward;
+      document.getElementById('giftBoxReward').textContent = t.giftBoxReward;
+      document.querySelectorAll('button[onclick*="redeemReward"]').forEach(btn => btn.textContent = t.redeemBtn);
+      document.getElementById('spinWheelModalTitle').textContent = t.spinWheelModalTitle;
+      document.getElementById('spinWheelResult').textContent = t.spinWheelResult;
+      document.getElementById('spinBtn').textContent = t.spinBtn;
+      document.getElementById('shareSpinBtn').textContent = t.shareSpinResult;
+      document.getElementById('closeSpinWheelBtn').textContent = t.close;
+      document.getElementById('rewardSuccessTitle').textContent = t.rewardSuccessTitle;
+      document.getElementById('closeRewardSuccessBtn').textContent = t.close;
+      document.getElementById('insufficientPointsTitle').textContent = t.insufficientPointsTitle;
+      document.getElementById('closeInsufficientPointsBtn').textContent = t.close;
+      updateTransactionHistory();
+    }
+
+    // Handle Purchase
+    document.getElementById('purchaseBtn').addEventListener('click', () => {
+      const amount = parseInt(document.getElementById('purchaseAmount').value);
+      if (amount >= 10) {
+        const newPoints = Math.floor(amount / 10);
+        points += newPoints;
+        totalSpent += amount;
+        transactions.push({ amount, points: newPoints, date: new Date().toLocaleString() });
+        updatePoints();
+        updateTransactionHistory();
+        updateProgress();
+        if (isGameGroup && amount >= 200) {
+          document.getElementById('spinWheelBtn').disabled = false;
+          document.getElementById('spinWheelBtn').classList.remove('disabled:bg-gray-400', 'disabled:cursor-not-allowed');
+        }
+      }
+    });
+
+    // Spin Wheel (Game Group Only)
+    document.getElementById('spinWheelBtn').addEventListener('click', () => {
+      if (isGameGroup) {
+        document.getElementById('spinWheelModal').classList.remove('hidden');
+        document.getElementById('spinWheelBtn').disabled = true;
+        document.getElementById('spinWheelBtn').classList.add('disabled:bg-gray-400', 'disabled:cursor-not-allowed');
+      }
+    });
+
+    document.getElementById('spinBtn').addEventListener('click', () => {
+      const rewards = [5, 10, 15, 20];
+      const randomReward = rewards[Math.floor(Math.random() * rewards.length)];
+      points += randomReward;
+      const itemName = currentLanguage === 'zh-TW' ? `${randomReward} 點` : `${randomReward} Points`;
+      document.getElementById('spinWheelResult').textContent = translations[currentLanguage].rewardSuccessMessage.replace('{item}', itemName);
+      document.getElementById('shareSpinBtn').classList.remove('hidden');
+      document.getElementById('spinBtn').classList.add('hidden');
+      updatePoints();
+      updateProgress();
+      transactions.push({ amount: 0, points: randomReward, date: new Date().toLocaleString(), type: 'spin' });
+      updateTransactionHistory();
+    });
+
+    document.getElementById('shareSpinBtn').addEventListener('click', () => {
+      alert(currentLanguage === 'zh-TW' ? '模擬分享抽獎結果至社群媒體！' : 'Simulated sharing spin result to social media!');
+    });
+
+    // Redeem Reward
+    function redeemReward(item, cost) {
+      if (points >= cost) {
+        points -= cost;
+        const itemName = currentLanguage === 'zh-TW' ?
+          (item === 'coffee' ? '免費中杯咖啡' : item === 'buyOneGetOne' ? '買一送一' : item === 'mug' ? '限量馬克杯' : '限量禮盒') :
+          (item === 'coffee' ? 'Free Medium Coffee' : item === 'buyOneGetOne' ? 'Buy One Get One' : item === 'mug' ? 'Limited Mug' : 'Limited Gift Box');
+        document.getElementById('rewardSuccessMessage').textContent = translations[currentLanguage].rewardSuccessMessage.replace('{item}', itemName);
+        document.getElementById('rewardSuccessModal').classList.remove('hidden');
+        updatePoints();
+        transactions.push({ amount: 0, points: -cost, date: new Date().toLocaleString(), type: 'redeem', item: itemName });
+        updateTransactionHistory();
+      } else {
+        const pointsNeeded = cost - points;
+        document.getElementById('insufficientPointsMessage').textContent = translations[currentLanguage].insufficientPointsMessage.replace('{points}', pointsNeeded);
+        document.getElementById('insufficientPointsModal').classList.remove('hidden');
+      }
+    }
+
+    // Update Points
+    function updatePoints() {
+      document.getElementById('points').textContent = points;
+    }
+
+    // Update Progress (Game Group Only)
+    function updateProgress() {
+      if (isGameGroup) {
+        const progress = Math.min((points / 100) * 100, 100);
+        document.getElementById('progressBar').style.width = `${progress}%`;
+        document.getElementById('progressPercent').textContent = `${progress}%`;
+      }
+    }
+
+    // Update Transaction History
+    function updateTransactionHistory() {
+      const history = document.getElementById('transactionHistory');
+      history.innerHTML = '';
+      transactions.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'text-sm text-green-700';
+        if (t.type === 'spin') {
+          item.textContent = currentLanguage === 'zh-TW' ?
+            `${t.date}: 轉輪抽獎獲得 ${t.points} 點` :
+            `${t.date}: Spin Wheel earned ${t.points} points`;
+        } else if (t.type === 'redeem') {
+          item.textContent = currentLanguage === 'zh-TW' ?
+            `${t.date}: 兌換 ${t.item}，使用 ${-t.points} 點` :
+            `${t.date}: Redeemed ${t.item}, used ${-t.points} points`;
+        } else {
+          item.textContent = currentLanguage === 'zh-TW' ?
+            `${t.date}: 消費 ${t.amount} 元，獲得 ${t.points} 點` :
+            `${t.date}: Spent $${t.amount}, earned ${t.points} points`;
+        }
+        history.appendChild(item);
+      });
+    }
+
+    // Modal Functions
+    function closeSpinWheelModal() {
+      document.getElementById('spinWheelModal').classList.add('hidden');
+      document.getElementById('spinWheelResult').textContent = translations[currentLanguage].spinWheelResult;
+      document.getElementById('spinBtn').classList.remove('hidden');
+      document.getElementById('shareSpinBtn').classList.add('hidden');
+    }
+
+    function closeRewardSuccessModal() {
+      document.getElementById('rewardSuccessModal').classList.add('hidden');
+    }
+
+    function closeInsufficientPointsModal() {
+      document.getElementById('insufficientPointsModal').classList.add('hidden');
+    }
+
+    // Initialize
+    initializeGroup();
+    updateLanguage();
+  </script>
+</body>
+</html>
